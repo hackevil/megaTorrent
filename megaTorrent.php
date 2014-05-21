@@ -3,7 +3,7 @@ include_once('inc_mega.php');
 /* 
  Config
  */
- $GLOBALS['email'] = 'MEGA_EMAIL';
+$GLOBALS['email'] = 'MEGA_EMAIL';
 $GLOBALS['password'] = 'MEGA_PASSWD';
 
 
@@ -26,7 +26,6 @@ echo 'File: ',$filename,PHP_EOL;
 if(!file_exists($filename)){echo 'ERROR GETTING THE FILE';exit;}
 
 // Upload file
-echo 'Uploading...',PHP_EOL;
 $encodedFilename = $filename.'.enc';
 
 if(!file_exists('./sid')){
@@ -41,15 +40,23 @@ $sid = file_get_contents('./sid');
 $master_key = json_decode(file_get_contents('./master_key'),true);
 
 // Get root Id
-$files = api_req(array('a' => 'f', 'c' => 1));
-if(!is_object($files)){echo 'ERROR GETTING FILE LIST',PHP_EOL;exit;}
+$sleep = false;
+do{
+	$files = api_req(array('a' => 'f', 'c' => 1));
+	if($sleep){sleep(5);}
+}while(!is_object($files) && $sleep = true);
 foreach($files->f as $file){if($file->t == 2){$root_id = $file->h;}}
 
 
 $fileSize = filesize($filename);
-$ul_url = api_req(array('a'=>'u','s'=>$fileSize));
-$ul_url = $ul_url->p;
-if(!$ul_url){echo 'ERROR GETTING UPLOAD URL',PHP_EOL;exit;}
+$sleep = false;
+do{
+	echo 'Getting upload URL...',PHP_EOL;
+	$ul_url = api_req(array('a'=>'u','s'=>$fileSize));
+	$ul_url = $ul_url->p;
+
+	if($sleep){sleep(5);}
+}while(!$ul_url && $sleep = true);
 
 
 $ul_key = array(0,0,0,0,0,0);
@@ -60,19 +67,29 @@ $encIv = a32_to_str(array($ul_key[4],$ul_key[5],0,0));
 $encKeyHex = bin2hex($encKey);
 $encIvHex = bin2hex($encIv);
 
-// Encode file
+// Encrypt file
+echo 'Encrypting file...',PHP_EOL;
 $cmd = 'openssl enc -d -aes-128-ctr -K '.$encKeyHex.' -iv '.$encIvHex.' -in "'.$filename.'" > "'.$encodedFilename.'"';
 shell_exec($cmd);
 
+echo 'Uploading...',PHP_EOL;
 $handle = sendFile($ul_url,$encodedFilename);
+echo 'Uploaded',PHP_EOL;
 
+
+echo 'Adding file to container...',PHP_EOL;
 $data_mac = cbc_mac_file($filename, array_slice($ul_key, 0, 4), array_slice($ul_key, 4, 2));
 $meta_mac = array($data_mac[0] ^ $data_mac[1], $data_mac[2] ^ $data_mac[3]);
 $attributes = array('n' => basename($filename));
 $enc_attributes = enc_attr($attributes, array_slice($ul_key, 0, 4));
 $key = array($ul_key[0] ^ $ul_key[4], $ul_key[1] ^ $ul_key[5], $ul_key[2] ^ $meta_mac[0], $ul_key[3] ^ $meta_mac[1], $ul_key[4], $ul_key[5], $meta_mac[0], $meta_mac[1]);
-$uploadedFile = api_req(array('a'=>'p','t'=>$root_id,'n'=>array(array('h'=>$handle,'t'=>0,'a'=>base64urlencode($enc_attributes),'k'=>a32_to_base64(encrypt_key($key,$master_key))))));
 
+$encryptedKey = a32_to_base64(encrypt_key($key,$master_key));
+do{
+	$uploadedFile = api_req(array('a'=>'p','t'=>$root_id,'n'=>array(array('h'=>$handle,'t'=>0,'a'=>base64urlencode($enc_attributes),'k'=>$encryptedKey))));
+}while(!is_object($uploadedFile));
+
+echo 'Getting public link...',PHP_EOL;
 $file = $uploadedFile->f[0];
 $publicHandle = api_req(array('a'=>'l','n' => $file->h));
 $key = explode(':',$file->k);

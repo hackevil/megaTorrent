@@ -371,22 +371,11 @@ function cbc_mac_file($filename,$k,$n){
 
 	$chunks = get_chunks($fileSize);
 	$file_mac = array(0,0,0,0);
+	$key = bin2hex(a32_to_str($k));
 
-	foreach ($chunks as $pos=>$size){
-		fseek($fp,$pos);
-		$chunk = fread($fp,$size);
-
-		if($size%16 > 0){$chunk .= str_repeat("\0",$padding_size);}
-
-		$chunk_mac = array($n[0], $n[1], $n[0], $n[1]);
-		for ($i = 0;$i < $size;$i += 16) {
-			$block = str_to_a32(substr($chunk, $i, 16));
-			$chunk_mac = array($chunk_mac[0] ^ $block[0], $chunk_mac[1] ^ $block[1], $chunk_mac[2] ^ $block[2], $chunk_mac[3] ^ $block[3]);
-			$chunk_mac = aes_cbc_encrypt_a32($chunk_mac, $k);
-		}
-		$file_mac = array($file_mac[0] ^ $chunk_mac[0], $file_mac[1] ^ $chunk_mac[1], $file_mac[2] ^ $chunk_mac[2], $file_mac[3] ^ $chunk_mac[3]);
-		$file_mac = aes_cbc_encrypt_a32($file_mac, $k);
-	}
+	$cmd = 'openssl enc -e -aes-128-cbc -K '.$key.' -iv 0000000000000000 < '.$filename.' | tail -c 16 ';
+	$file_mac = shell_exec($cmd);
+	$file_mac = str_to_a32($file_mac);
 
 	fclose($fp);
 	return $file_mac;
