@@ -3,7 +3,7 @@ include_once('inc_mega.php');
 /* 
  Config
  */
-$GLOBALS['email'] = 'MEGA_EMAIL';
+ $GLOBALS['email'] = 'MEGA_EMAIL';
 $GLOBALS['password'] = 'MEGA_PASSWD';
 
 
@@ -11,10 +11,11 @@ $GLOBALS['password'] = 'MEGA_PASSWD';
 if($argc < 2){showError();}
 if(!preg_match('/^magnet:.*?xt=[^:]+:[^:]+:([^&]+)/',$argv[1],$m)){showError();}
 $magnet = $argv[1];
+$magnetHash = $m[1];
 
-if(file_exists('/tmp/torrent-stream/'.$m[1])){
+if(file_exists('/tmp/torrent-stream/'.$magnetHash)){
 	echo 'Deleting previous torrent download',PHP_EOL;
-	rrmdir('/tmp/torrent-stream/'.$m[1]);
+	rrmdir('/tmp/torrent-stream/'.$magnetHash);
 }
 
 echo 'Downloading...',PHP_EOL;
@@ -80,6 +81,8 @@ $decryptedKey = a32_to_base64(decrypt_key(base64_to_a32($key[1]), $master_key));
 $publicLink = 'http://mega.co.nz/#!'.$publicHandle.'!'.$decryptedKey;
 echo 'Public link: ',$publicLink,PHP_EOL;
 
+// Delete files
+rrmdir('/tmp/torrent-stream/'.$magnetHash);
 
 
 function showError(){
